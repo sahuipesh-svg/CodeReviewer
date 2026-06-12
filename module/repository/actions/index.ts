@@ -5,6 +5,7 @@ import { auth} from "@/lib/auth"
 import { headers } from "next/headers"
 import { createWebhook, getRepositories } from "@/module/github/lib/github"
 import { prismaVersion } from "@/lib/generated/prisma/internal/prismaNamespace"
+import { inngest } from "@/inngest/client"
 
 
 
@@ -59,5 +60,18 @@ export const connectRepository=async(owner:string,repo:string,githubId:number)=>
    }
   //usage tracking
   // trigger indexing for rag
+  try{
+    await inngest.send({
+       name:"repository.connected",
+       data:{
+        owner,
+        repo,
+        userId:session.user.id,
+       }
+    })
+
+  }catch(error){
+     console.error("Failed to trigger repository indexing:",error)
+  }
   return webhook
 }
