@@ -12,11 +12,11 @@ export const getGithubToken=async()=>{
    if(!session){
      throw new Error("Unauthorized");
    }
-   const account=await prisma.account.findFirst({
-   where :{
-      userId:sessionStorage.user.id,
-      providerId:"github"
-   }
+  const account=await prisma.account.findFirst({
+  where :{
+    userId:session.user.id,
+    providerId:"github"
+  }
 })
 if(!account?.accessToken){
   throw new Error("No github access token found")
@@ -138,7 +138,7 @@ export const deleteWebhook=async(owner:string,repo:string)=>{
 
 
 export async function getRepoFileContents(token:string,owner:string,repo:string,path:string="")
-:Promise<{path:String,content:string}[]>{
+:Promise<{path:string,content:string}[]>{
 
     const octokit=new Octokit({auth:token});
    
@@ -182,4 +182,40 @@ let files:{path:string,content:string}[]=[];
      }
  }
  return files;
+}
+
+
+export async function getPullRequestDiff(token:string,owner:string,repo:string,prNumber:number){
+     const octokit=new Octokit({auth:token});
+   
+  const {data:pr}=await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number:prNumber
+  })
+
+  const {data:diff}=await octokit.rest.pulls.get({
+      owner,
+      repo,
+      pull_number:prNumber,
+      mediaType:{
+        format:"diff"
+      }
+  });
+  return {
+      diff:diff as unknown as string,
+      title:pr.title,
+      description:pr.body || "",
+  }
+}
+
+export async function postReviewComment(token:string,owner:string,repo:string,prNumber:number,review:string){
+  const octokit=new Octokit({auth:token});
+  await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number:prNumber,
+    body:`## CodeLens AI Review\n\n${review}`
+    
+  })
 }
