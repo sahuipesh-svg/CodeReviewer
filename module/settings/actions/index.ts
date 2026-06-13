@@ -88,7 +88,6 @@ export async function getConnectedRepositories(){
         name:true,
        fullName:true,
         createdAt:true,
-           description:true,
         url:true,
         
       },
@@ -177,6 +176,8 @@ export async function disconnectAllRepositories(){
     })
     revalidatePath("/dashboard/settings","page");
     revalidatePath("/dashboard/repositories","page");
+
+    return { success: true, count: result.count }
 
 
   }catch(error){

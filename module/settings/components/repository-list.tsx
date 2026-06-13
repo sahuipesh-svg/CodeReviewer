@@ -47,7 +47,7 @@ export function RepositoryList() {
       }
     })
  const disconnectAllMutation=useMutation({
-    mutationFn:async (repositoryId:string)=>{
+    mutationFn:async ()=>{
 
         return await disconnectAllRepositories()
       },
