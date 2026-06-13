@@ -301,7 +301,7 @@ export default function SubscriptionPageClient() {
 							)}
 						</div>
 						<div className="mt-2">
-							<span className="text-3xl font-bold">$0</span>
+							<span className="text-3xl font-bold">0</span>
 							<span className="text-muted-foreground">
 								/month
 							</span>
@@ -352,7 +352,7 @@ export default function SubscriptionPageClient() {
 							)}
 						</div>
 						<div className="mt-2">
-							<span className="text-3xl font-bold">$9.99</span>
+							<span className="text-3xl font-bold">1999.99</span>
 							<span className="text-muted-foreground">
 								/month
 							</span>
