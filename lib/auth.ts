@@ -17,6 +17,7 @@ export const auth = betterAuth({
             scope:["repo"]
         }
     },
+    trustedOrigins:["https://localhost:3000","https://whimsical-factoid-pod.ngrok-free.dev"],
     plugins:[
  polar({
       client:PolarClient,
@@ -29,7 +30,7 @@ export const auth = betterAuth({
                             slug: "pro" // Custom slug for easy reference in Checkout URL, e.g. /checkout/pro
                         } 
                     ], 
-                    successUrl: "/success?checkout_id={CHECKOUT_ID}", 
+                    successUrl: process.env.POLAR_SUCCESS_URL|| "/dashboard/subscription?success=true",
                     authenticatedUsersOnly: true
                 }), 
                 portal({
