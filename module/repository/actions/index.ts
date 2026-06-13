@@ -6,6 +6,7 @@ import { headers } from "next/headers"
 import { createWebhook, getRepositories } from "@/module/github/lib/github"
 import { prismaVersion } from "@/lib/generated/prisma/internal/prismaNamespace"
 import { inngest } from "@/inngest/client"
+import {canConnectRepository,decrementRepositoryCount,incrementRepositoryCount} from "@/module/payment/lib/subscription";
 
 
 
@@ -43,7 +44,10 @@ export const connectRepository=async(owner:string,repo:string,githubId:number)=>
    if(!session){
     throw new Error("Unauthorized")
    }
-   // TODO:check if user can connect more repo
+    const canConnect=await canConnectRepository(session.user.id)
+    if(!canConnect){
+      throw new Error("You have reached the limit of repositories for this plan.Please upgrade your plan")
+    }
 
    const webhook=await createWebhook(owner,repo);
    if(webhook){
@@ -57,9 +61,11 @@ export const connectRepository=async(owner:string,repo:string,githubId:number)=>
          userId:session.user.id
        }
      })
-   }
-  //usage tracking
-  // trigger indexing for rag
+   
+  
+  await incrementRepositoryCount(session.user.id)
+  
+
   try{
     await inngest.send({
        name:"repository.connected",
@@ -73,5 +79,7 @@ export const connectRepository=async(owner:string,repo:string,githubId:number)=>
   }catch(error){
      console.error("Failed to trigger repository indexing:",error)
   }
+}
   return webhook
+
 }
