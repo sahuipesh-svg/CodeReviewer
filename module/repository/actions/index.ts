@@ -4,9 +4,18 @@ import prisma from "@/lib/db"
 import { auth} from "@/lib/auth"
 import { headers } from "next/headers"
 import { createWebhook, getRepositories } from "@/module/github/lib/github"
-import { prismaVersion } from "@/lib/generated/prisma/internal/prismaNamespace"
 import { inngest } from "@/inngest/client"
-import {canConnectRepository,decrementRepositoryCount,incrementRepositoryCount} from "@/module/payment/lib/subscription";
+
+type GitHubRepository = {
+   id: number;
+   name: string;
+   full_name: string;
+   description: string | null;
+   html_url: string;
+   stargazers_count: number;
+   language: string | null;
+   topics: string[];
+}
 
 
 
@@ -17,7 +26,7 @@ export const fetchRepositories=async(page:number=1,perPage:number=10)=>{
    if(!session){
     throw new Error("Unauthorized")
    }
-   const githubRepos=await getRepositories(page,perPage)
+   const githubRepos=await getRepositories(page,perPage) as GitHubRepository[]
 
    const dbRepos=await prisma.repository.findMany({
       where:{
@@ -26,7 +35,7 @@ export const fetchRepositories=async(page:number=1,perPage:number=10)=>{
    });
    const connectedRepoIds=new Set(dbRepos.map((repo=>repo.githubId)))
 
-   return githubRepos.map((repo:any)=>(
+   return githubRepos.map((repo:GitHubRepository)=>(
     {
       ...repo,
       isConnected:connectedRepoIds.has(BigInt(repo.id))
@@ -44,11 +53,6 @@ export const connectRepository=async(owner:string,repo:string,githubId:number)=>
    if(!session){
     throw new Error("Unauthorized")
    }
-    const canConnect=await canConnectRepository(session.user.id)
-    if(!canConnect){
-      throw new Error("You have reached the limit of repositories for this plan.Please upgrade your plan")
-    }
-
    const webhook=await createWebhook(owner,repo);
    if(webhook){
      await prisma.repository.create({
@@ -63,9 +67,6 @@ export const connectRepository=async(owner:string,repo:string,githubId:number)=>
      })
    
   
-  await incrementRepositoryCount(session.user.id)
-  
-
   try{
     await inngest.send({
        name:"repository.connected",

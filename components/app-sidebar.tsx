@@ -2,9 +2,8 @@
 "use client";
 import React from 'react'
 
-import {BookOpen,Settings,Moon,Sun,LogOut,Code2, Code} from "lucide-react"
+import {BookOpen,Settings,Moon,Sun,LogOut,Code2} from "lucide-react"
 import {useTheme} from "next-themes"
-import {useState,useEffect} from "react"
 import {usePathname} from "next/navigation"
 import {useSession} from "@/lib/auth-client"
 
@@ -17,7 +16,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSeparator
  
 } from "@/components/ui/sidebar"
 import {Avatar,AvatarFallback,AvatarImage} from "@/components/ui/avatar"
@@ -37,15 +35,10 @@ import Logout from "@/module/auth/components/logout"
 export const AppSidebar=()=>{
 
   const {theme,setTheme}=useTheme();
-  const [mounted,setMounted]=useState(false)
   const pathname=usePathname();
 
 
   const {data:session}=useSession();
-
-  useEffect(()=>{
-     setMounted(true)
-  },[])
 
    const navigationItems=[
     {
@@ -61,10 +54,6 @@ export const AppSidebar=()=>{
       title:"Reviews",
       url:"/dashboard/reviews",
       icon:BookOpen,
-    },{
-      title:"subscription",
-      url:"/dashboard/subscription",
-      icon:BookOpen,
     },
     {
       title:"Settings",
@@ -79,7 +68,7 @@ export const AppSidebar=()=>{
   } 
 
 
- if(!mounted || !session){
+ if(!session){
    return null
  }
 

@@ -3,7 +3,6 @@
 import { inngest } from "@/inngest/client";
 import prisma from "@/lib/db"
 import { getPullRequestDiff } from "@/module/github/lib/github";
-import {canCreateReview,incrementReviewCount} from "@/module/payment/lib/subscription";
 
 export async function reviewPullRequest(owner:string,repo:string,prNumber:number){
   try{
@@ -27,18 +26,12 @@ export async function reviewPullRequest(owner:string,repo:string,prNumber:number
 if(!repository){
     throw new Error("Repository not found.Please connect the repository")   
 }
- const canReview=await canCreateReview(repository.user.id,repository.id);
- if(!canReview){
-     throw new Error("You have reached the limit of reviews for this repository.Please upgrade your plan")
- }
-
-
   const githubAccount=repository.user.accounts[0];
   if(!githubAccount?.accessToken ){
      throw new Error("Github access token not found.Please connect the repository")
   }
   const token=githubAccount.accessToken;
-  const {title}=await getPullRequestDiff(token,owner,repo,prNumber)
+  await getPullRequestDiff(token,owner,repo,prNumber)
 
   await inngest.send({
        name:"pr.review.requested",
@@ -49,8 +42,6 @@ if(!repository){
           userId:repository.user.id
        }
   })
- await incrementReviewCount(repository.user.id,repository.id)
-
   return {success:true,meassage:"Review Queued"}
 }catch(error){
     try{
@@ -64,7 +55,7 @@ if(!repository){
                prNumber,
                prTitle:"failed to fetch PR",
                prUrl:`https://github.com/${owner}/${repo}/pull/${prNumber}`,
-               review:"Error: ${erroe instanceof Error?error.message:error}",
+               review:`Error: ${error instanceof Error ? error.message : String(error)}`,
                status:"failed"
             }
        })

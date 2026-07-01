@@ -7,85 +7,148 @@ import { headers } from "next/headers";
 import { Octokit } from "octokit";
 import prisma from "@/lib/db";
 
+const CONTRIBUTION_LEVEL_MAX = 4;
+const CONTRIBUTIONS_PER_LEVEL = 3;
+const ACTIVITY_MONTH_COUNT = 6;
+const GITHUB_SEARCH_PAGE_SIZE = 100;
+const MONTH_NAMES = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+] as const;
+
+type ContributionDay = {
+    date: string;
+    contributionCount: number;
+};
+
+type ContributionWeek = {
+    contributionDays: ContributionDay[];
+};
+
+type ContributionCalendar = {
+    totalContributions: number;
+    weeks: ContributionWeek[];
+};
+
+type MonthlyActivity = {
+    commits: number;
+    prs: number;
+    reviews: number;
+};
+
+async function requireSessionUser() {
+    const session = await auth.api.getSession({
+        headers: await headers(),
+    });
+
+    if (!session?.user) {
+        throw new Error("Unauthorized");
+    }
+
+    return session.user;
+}
+
+async function getAuthenticatedGithubUser(token: string) {
+    const octokit = new Octokit({ auth: token });
+    const { data: user } = await octokit.rest.users.getAuthenticated();
+
+    return { octokit, user };
+}
+
+function getActivityStartDate() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() - (ACTIVITY_MONTH_COUNT - 1), 1);
+}
+
+function createMonthlyActivityBuckets(): Record<string, MonthlyActivity> {
+    const monthlyData: Record<string, MonthlyActivity> = {};
+    const now = new Date();
+
+    for (let i = ACTIVITY_MONTH_COUNT - 1; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        monthlyData[MONTH_NAMES[date.getMonth()]] = { commits: 0, prs: 0, reviews: 0 };
+    }
+
+    return monthlyData;
+}
+
+function getMonthKey(date: Date) {
+    return MONTH_NAMES[date.getMonth()];
+}
+
+function mapContributionCalendar(calendar: ContributionCalendar) {
+    return calendar.weeks.flatMap((week) =>
+        week.contributionDays.map((day) => ({
+            date: day.date,
+            count: day.contributionCount,
+            level: Math.min(
+                CONTRIBUTION_LEVEL_MAX,
+                Math.floor(day.contributionCount / CONTRIBUTIONS_PER_LEVEL)
+            ),
+        }))
+    );
+}
+
 
 export async function getContributionStats() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers(),
-        });
-
-        if (!session?.user) {
-            throw new Error("Unauthorized");
-        }
-
+        await requireSessionUser();
         const token = await getGithubToken();
-
-        // Get the actual GitHub username from the GitHub API
-        const octokit = new Octokit({ auth: token });
-
-        const { data: user } = await octokit.rest.users.getAuthenticated();
-        const username = user.login;
-
-        const calendar = await fetchUserContribution(token, username);
+        const { user } = await getAuthenticatedGithubUser(token);
+        const calendar = await fetchUserContribution(token, user.login) as ContributionCalendar | null;
 
         if (!calendar) {
             return null;
         }
 
-        const contributions = calendar.weeks.flatMap((week: any) =>
-            week.contributionDays.map((day: any) => ({
-                date: day.date,
-                count: day.contributionCount,
-                level: Math.min(4, Math.floor(day.contributionCount / 3)), // Convert to 0-4 scale
-            }))
-        )
-
         return {
-            contributions,
+            contributions: mapContributionCalendar(calendar),
             totalContributions:calendar.totalContributions
         }
 
     } catch (error) {
-console.error("Error fetching contribution stats:", error);
-    return null;
+        console.error("Error fetching contribution stats:", error);
+        return null;
     }
 }
 
 
 export async function getDashboardStats() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers(),
-        })
-
-        if (!session?.user) {
-            throw new Error("Unauthorized");
-        }
-
+        const userSession = await requireSessionUser();
         const token = await getGithubToken();
-        const octokit = new Octokit({ auth: token })
+        const { octokit, user } = await getAuthenticatedGithubUser(token);
 
-        // Get users github username
+        const [totalRepos, totalReviews, calendar, { data: prs }] = await Promise.all([
+            prisma.repository.count({
+                where: { userId: userSession.id },
+            }),
+            prisma.review.count({
+                where: {
+                    repository: {
+                        userId: userSession.id,
+                    },
+                },
+            }),
+            fetchUserContribution(token, user.login) as Promise<ContributionCalendar | null>,
+            octokit.rest.search.issuesAndPullRequests({
+                q: `author:${user.login} type:pr`,
+                per_page: 1
+            }),
+        ]);
 
-        const { data: user } = await octokit.rest.users.getAuthenticated()
-
-        // TODO: FETCH TOTAL CONNECTED REPO FROM DB;
-        const totalRepos = 30;
-
-        //
-        const calendar = await fetchUserContribution(token, user.login);
         const totalCommits = calendar?.totalContributions || 0
-
-        // Count prs from database or github
-        const { data: prs } = await octokit.rest.search.issuesAndPullRequests({
-            q: `author:${user.login} type:pr`,
-            per_page: 1
-        })
-
         const totalPRs = prs.total_count
-
-        // TODO: COUNT AI REVIEWS FROM DATABASE
-        const totalReviews = 44
 
         return {
             totalCommits,
@@ -107,103 +170,60 @@ export async function getDashboardStats() {
 
 export async function getMonthlyActivity() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers(),
-        })
-
-        if (!session?.user) {
-            throw new Error("Unauthorized");
-        }
+        const userSession = await requireSessionUser();
         const token = await getGithubToken();
-        const octokit = new Octokit({ auth: token })
+        const { octokit, user } = await getAuthenticatedGithubUser(token);
 
-        const { data: user } = await octokit.rest.users.getAuthenticated()
-
-        const calendar = await fetchUserContribution(token, user.login)
+        const calendar = await fetchUserContribution(token, user.login) as ContributionCalendar | null;
 
         if (!calendar) {
             return [];
         }
 
-        const monthlyData: {
-            [key: string]: { commits: number; prs: number; reviews: number }
-        } = {}
+        const monthlyData = createMonthlyActivityBuckets();
 
-        const monthNames = [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-        ];
-
-        // Initialize last 6 months
-        const now = new Date();
-        for (let i = 5; i >= 0; i--) {
-            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const monthKey = monthNames[date.getMonth()];
-            monthlyData[monthKey] = { commits: 0, prs: 0, reviews: 0 };
-        }
-
-        calendar.weeks.forEach((week: any) => {
-            week.contributionDays.forEach((day: any) => {
+        calendar.weeks.forEach((week) => {
+            week.contributionDays.forEach((day) => {
                 const date = new Date(day.date);
-                const monthKey = monthNames[date.getMonth()];
+                const monthKey = getMonthKey(date);
                 if (monthlyData[monthKey]) {
                     monthlyData[monthKey].commits += day.contributionCount;
                 }
             })
         })
 
-        // Fetch reviews from database for last 6 months
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const activityStartDate = getActivityStartDate();
 
-
-        // TODO: REVIEWS'S REAL DATA
-        const generateSampleReviews = () => {
-            const sampleReviews = [];
-            const now = new Date();
-
-            // Generate random reviews over the past 6 months
-            for (let i = 0; i < 45; i++) {
-                const randomDaysAgo = Math.floor(Math.random() * 180); // Random day in last 6 months
-                const reviewDate = new Date(now);
-                reviewDate.setDate(reviewDate.getDate() - randomDaysAgo);
-
-                sampleReviews.push({
-                    createdAt: reviewDate,
-                });
-            }
-
-            return sampleReviews;
-        };
-
-        const reviews = generateSampleReviews()
-
+        const reviews = await prisma.review.findMany({
+            where: {
+                createdAt: {
+                    gte: activityStartDate,
+                },
+                repository: {
+                    userId: userSession.id,
+                },
+            },
+            select: {
+                createdAt: true,
+            },
+        });
+        
         reviews.forEach((review) => {
-            const monthKey = monthNames[review.createdAt.getMonth()];
+            const monthKey = getMonthKey(review.createdAt);
             if (monthlyData[monthKey]) {
                 monthlyData[monthKey].reviews += 1;
             }
         })
 
         const { data: prs } = await octokit.rest.search.issuesAndPullRequests({
-            q: `author:${user.login} type:pr created:>${sixMonthsAgo.toISOString().split("T")[0]
+            q: `author:${user.login} type:pr created:>${activityStartDate.toISOString().split("T")[0]
                 }`,
-            per_page: 100,
+            per_page: GITHUB_SEARCH_PAGE_SIZE,
         });
 
-        prs.items.forEach((pr: any) => {
+        prs.items.forEach((pr) => {
             const date = new Date(pr.created_at);
-            const monthKey = monthNames[date.getMonth()];
+            const monthKey = getMonthKey(date);
             if (monthlyData[monthKey]) {
                 monthlyData[monthKey].prs += 1;
             }

@@ -125,7 +125,7 @@ const handleConnect=(repo:Repository)=>{
             </div>
             <div className="grid gap-4">
               {
-                filteredRepositories.map((repo:any)=>(
+                filteredRepositories.map((repo:Repository)=>(
                     <Card key={repo.id} className="hover:shadow-md transition-shadow">
         <CardHeader>
           <div className="flex items-start justify-between">
