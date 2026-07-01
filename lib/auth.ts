@@ -2,6 +2,8 @@ import { betterAuth } from "better-auth";
 import {prismaAdapter} from "better-auth/adapters/prisma";
 import prisma from "./db";
 
+const appBaseUrl = process.env.NEXT_PUBLIC_APP_BASE_URL?.trim();
+const betterAuthUrl = process.env.BETTER_AUTH_URL?.trim();
 
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
@@ -14,7 +16,16 @@ export const auth = betterAuth({
             scope:["repo"]
         }
     },
-    trustedOrigins:["https://localhost:3000","https://whimsical-factoid-pod.ngrok-free.dev"],
+    trustedOrigins:Array.from(
+        new Set(
+            [
+                betterAuthUrl,
+                appBaseUrl,
+                "http://localhost:3000",
+                "https://localhost:3000",
+            ].filter(Boolean) as string[]
+        )
+    ),
 });
 
 

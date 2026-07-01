@@ -6,7 +6,7 @@ import {requireUnAuth} from "@/module/auth/utils/auth-utils";
 
 
 const LoginPage = async ()=>{
-   requireUnAuth()
+   await requireUnAuth()
    return (
     <div>
      <LoginUI/>
