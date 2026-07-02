@@ -15,6 +15,7 @@ export const auth = betterAuth({
                     "127.0.0.1:*",
                     "[::1]:*",
                     "*.ngrok-free.dev",
+                    "*.vercel.app",
                     appBaseHost,
                 ].filter(Boolean) as string[]
             )
@@ -42,6 +43,7 @@ export const auth = betterAuth({
                 "http://127.0.0.1:*",
                 "https://127.0.0.1:*",
                 "https://*.ngrok-free.dev",
+                "https://*.vercel.app",
             ].filter(Boolean) as string[]
         )
     ),
