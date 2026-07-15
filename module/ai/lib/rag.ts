@@ -6,7 +6,7 @@ import {google} from "@ai-sdk/google"
 
 export async function generateEmbedding(text:string){
     const {embedding}=await embed({
-          model:google.textEmbedding("text-embedding-004"),
+          model:google.embedding("text-embedding-004"),
           value:text
     })
     return embedding;
