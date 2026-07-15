@@ -7,4 +7,4 @@ export const pinecone=new Pinecone({
   apiKey:process.env.PINECONE_DB_API_KEY!
 })
 
-export const pineconeIndex=pinecone.index("codelens-ai")
+export const pineconeIndex=pinecone.index({ name: "codelens-ai" })
